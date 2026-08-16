@@ -4,6 +4,10 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Local board definition for Waveshare RP2350-LCD-1.47-A.
+set(PICO_BOARD_HEADER_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/boards" CACHE STRING
+    "Additional Pico SDK board-definition directories")
+
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 # Fallback only: an unconditional set() would silently override both -D on the
@@ -19,7 +23,7 @@ if(NOT DEFINED PICO_PLATFORM)
     set(PICO_PLATFORM "rp2350-arm-s")
 endif()
 if(NOT DEFINED PICO_BOARD)
-    set(PICO_BOARD "sparkfun_promicro_rp2350")
+    set(PICO_BOARD "waveshare_rp2350_lcd147")
 endif()
 
 include(cmake/pico_sdk_import.cmake)
