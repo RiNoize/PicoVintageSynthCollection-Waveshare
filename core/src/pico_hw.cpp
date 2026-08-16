@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: 2026 Michi71
-
 // pico_hw.cpp - boot, clock and flash timing for the PicoFace platform.
 //
 // One board for every instrument. The only per-instrument choice left is
@@ -13,17 +12,14 @@
 #include <hardware/vreg.h>
 #include <hardware/sync.h>
 #include <pico/multicore.h>
-
 #include "pico_hw.h"
 #include "project_config.h"
-
 #if PICO_RP2040
 // #include "../../memops_opt/memops_opt.h"
 #else
 #include <hardware/structs/qmi.h>
 #include <hardware/structs/xip.h>
 #endif
-
 
 // Clock target and the matching flash timing. Five instruments run at 444 MHz
 // with the OC timing; PicoFaceRD sets both to its 480 MHz pair through DEFINES
@@ -33,17 +29,24 @@
 #ifndef PICOFACE_SYS_CLOCK_HZ
 #define PICOFACE_SYS_CLOCK_HZ 444000000
 #endif
-
 #ifndef PICOFACE_QMI_M0_TIMING_TARGET
 #define PICOFACE_QMI_M0_TIMING_TARGET PICOFACE_QMI_M0_TIMING_OC
 #endif
 
 uint8_t u8x8_byte_pico_hw_i2c(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_ptr)
 {
+#ifdef PICOFACE_HEADLESS
+    // Fix 01: do not touch GP2/GP3. They are used by Encoder 2 on the
+    // Waveshare board. The normal u8g2 UI buffer may still run in RAM.
+    (void)u8x8;
+    (void)msg;
+    (void)arg_int;
+    (void)arg_ptr;
+    return 1;
+#else
     static uint8_t buffer[32]; /* u8g2/u8x8 will never send more than 32 bytes between START_TRANSFER and END_TRANSFER */
     static uint8_t buf_idx;
     uint8_t *data;
-
     switch (msg)
     {
     case U8X8_MSG_BYTE_SEND:
@@ -76,9 +79,9 @@ uint8_t u8x8_byte_pico_hw_i2c(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *
         break;
     }
     return 1;
+#endif
 }
-
-uint8_t u8x8_gpio_and_delay_pico(u8x8_t *u8x8, uint8_t msg,uint8_t arg_int, void *arg_ptr) 
+uint8_t u8x8_gpio_and_delay_pico(u8x8_t *u8x8, uint8_t msg,uint8_t arg_int, void *arg_ptr)
 {
   return 1;
 }
@@ -88,7 +91,6 @@ void pico_init()
     // FPU flush-to-zero + default-NaN for THIS core (see pico_hw.h for the
     // rationale; core 1 repeats the call at the top of core1_main).
     pico_fpu_ftz_enable();
-
 #if PICO_RP2350
     // NOTE: 1.60 V is +45% over the nominal 1.1 V DVDD and above the SDK's
     // "at your own risk" limit -- it was adopted for the overclock but never
@@ -99,7 +101,6 @@ void pico_init()
     vreg_disable_voltage_limit();
     vreg_set_voltage(VREG_VOLTAGE_1_60);
     sleep_ms(10);   // switching regulator settles in tens of microseconds
-
     // Raise clk_sys with the flash held at a slack timing across the switch.
     //
     // Ordering matters and is not free: the M0_TIMING write goes out over APB,
@@ -119,7 +120,6 @@ void pico_init()
     qmi_hw->m[0].timing = PICOFACE_QMI_M0_TIMING_SAFE;
     __dsb();
     __isb();
-
     const bool clockOk = set_sys_clock_hz(PICOFACE_SYS_CLOCK_HZ, false);
     // The SAFE timing stays in place if the target turned out to be unreachable.
     qmi_hw->m[0].timing = clockOk ? PICOFACE_QMI_M0_TIMING_TARGET
@@ -132,12 +132,16 @@ void pico_init()
     set_sys_clock_khz(402 * 1000, true);
 #endif
 
-    // Initialize stdio
+#ifndef PICOFACE_HEADLESS
+    // Upstream uses UART0 stdio on GP0/GP1. On the Waveshare those pins are
+    // the push switches for Encoder 2 and Encoder 3, so leave stdio disabled.
     stdio_init_all();
+#endif
 
-    // LED on GPIO25
+#ifdef PIN_LED
     gpio_init(PIN_LED);
     gpio_set_dir(PIN_LED, GPIO_OUT);
+#endif
 
     uint32_t rand_seed = 0;
     for (int i = 0; i < 32; i++)
