@@ -1,0 +1,51 @@
+name: Waveshare RP2350 Smoke Build
+
+on:
+  push:
+    branches:
+      - waveshare-rp2350-lcd147
+  workflow_dispatch:
+
+jobs:
+  waveshare-smoke:
+    name: Waveshare RP2350 compile test
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Install ARM toolchain
+        uses: carlosperate/arm-none-eabi-gcc-action@v1
+        with:
+          release: 'latest'
+
+      - name: Install host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends             cmake ninja-build build-essential python3             libusb-1.0-0-dev pkg-config
+
+      # PicoFaceJV is intentionally NOT used in CI because its ROM files
+      # are not stored in the public repository. PicoFaceMD is ROM-free
+      # and is enough to verify the Waveshare board definition, Pico SDK,
+      # shared core and our RP2350 hardware configuration compile correctly.
+      - name: Configure Waveshare build
+        run: |
+          cmake -S . -B build -G Ninja             -DCMAKE_BUILD_TYPE=Release             -DPICO_PLATFORM=rp2350-arm-s             -DPICO_BOARD=waveshare_rp2350_lcd147             -DPICOFACE_INSTRUMENTS_FILTER=PicoFaceMD
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Collect UF2
+        run: |
+          mkdir -p artifacts
+          cp build/PicoFaceMD.uf2 artifacts/
+
+      - name: Upload test firmware
+        uses: actions/upload-artifact@v7
+        with:
+          name: Waveshare-RP2350-Smoke-Test
+          path: artifacts/PicoFaceMD.uf2
+          if-no-files-found: error
