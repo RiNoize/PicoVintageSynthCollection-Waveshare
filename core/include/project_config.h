@@ -1,90 +1,63 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: 2026 Michi71
 
-// project_config.h - the PicoFace hardware platform.
-//
-// One board for every instrument: pin map and flash timing live here in
-// the core, not per instrument. Every pin below was already identical in all
-// original repositories; only comments and one extra timing constant
-// differed, which is why this used to be copied once per instrument.
+// project_config.h - Waveshare RP2350-LCD-1.47-A hardware map for this fork.
 #ifndef __PROJECT_CONFIG_H__
 #define __PROJECT_CONFIG_H__
 
-// DIN MIDI on uart1, behind the opto-coupler on the board. uart0 (GPIO 0/1)
-// stays reserved for stdio, so the two never collide.
+// Fix 01 is deliberately headless. The onboard LCD will be added next.
+#define PICOFACE_HEADLESS 1
+
+// DIN MIDI on uart1. GP5 receives the H11L1 MIDI-IN output.
 #define PIN_MIDI_RX 5
 #define PIN_MIDI_TX 4
 
-// Pimoroni Pico Audio
-//#define PIN_I2S_DOUT  9
-//#define PIN_I2S_BCK   10
-//#define PIN_I2S_WS    11
-
-// Waveshare Pico Audio
+// I2S -> PCM5102
 #define PIN_I2S_DOUT  26
 #define PIN_I2S_BCK   27
 #define PIN_I2S_WS    28
 
-#define  PIN_LED	  25
-
+// Kept only so the existing u8g2 callbacks compile. In headless mode the
+// callback does not initialise I2C, therefore GP2/GP3 remain encoder pins.
 #define PIN_OLED_SDA  2
 #define PIN_OLED_SCL  3
 
-//#define PIN_POT_0     28
+// Analogue potentiometer
 #define PIN_POT_1     29
 
-// Selector encoder
+// Encoder 1 - Selector
 #define PIN_SEL_CLK   6
 #define PIN_SEL_DT    7
 #define PIN_SEL_SW    8
 
-// Param A encoder
-#define PIN_PA_CLK    10
-#define PIN_PA_DT     11
-#define PIN_PA_SW     14   // optional switch
+// Encoder 2 - Param A
+#define PIN_PA_CLK    2
+#define PIN_PA_DT     3
+#define PIN_PA_SW     0
 
-// Param B encoder
-#define PIN_PB_CLK    12
-#define PIN_PB_DT     13
-#define PIN_PB_SW     15   // optional switch
+// Encoder 3 - Param B
+#define PIN_PB_CLK    9
+#define PIN_PB_DT     25
+#define PIN_PB_SW     1
+
+// Board-internal GPIOs intentionally left untouched:
+// GP10..15 = microSD, GP16..21 = LCD, GP22 = onboard RGB LED.
 
 // QMI M0_TIMING values. Bit layout (see hardware/regs/qmi.h):
 //   CLKDIV  [7:0]   flash clock = clk_sys / CLKDIV
 //   RXDELAY [10:8]  read data sample point, in clk_sys cycles
 // The upper bits (COOLDOWN=1, PAGEBREAK=2, MIN_DESELECT=7) are identical in
 // all three values below; only CLKDIV and RXDELAY differ.
-
 // Set BEFORE the clk_sys change, and left in place if the change fails.
-// CLKDIV=8, RXDELAY=2 -- deliberately slack, because this is the timing the
-// flash runs with in the window between "clk_sys has jumped to its target"
-// and "the final timing has been written". At 444 MHz that window is
-// 444/8 = 55 MHz, where RXDELAY=2 has ample margin.
-//
-// It used to be CLKDIV=4 here, putting that window at 111 MHz. RXDELAY
-// compensates a round-trip delay that is fixed in nanoseconds, so the value
-// needed grows with clk_sys, and 2 is only barely enough at 111 MHz. A 480 MHz
-// build of this same code put the window at 120 MHz, where RXDELAY=2 is not
-// enough at all: the core hung on the first instruction fetch after the clock
-// switch and the board would not boot. 444 MHz stayed on the working side of
-// that edge, but with no margin worth the name. See README, "The 480 MHz boot
-// failure".
+// CLKDIV=8, RXDELAY=2 -- deliberately slack during the clock switch.
 #define PICOFACE_QMI_M0_TIMING_SAFE 0x60007208u
 
-// 444 MHz target: CLKDIV=3, RXDELAY=3 -> 148 MHz flash (above the chip's
-// nominal 133 MHz, hence "overclock"; measured stable on this board).
-// Single source of truth for boot (pico_hw.cpp) AND the post-flash-write
-// restore in veeprom.cpp -- these MUST match or the device runs with
-// wrong flash timing after the first settings save.
-#define PICOFACE_QMI_M0_TIMING_OC 0x60007303u
+// Waveshare bring-up: 444 MHz / CLKDIV=4 = 111 MHz flash.
+// This is deliberately more conservative than the upstream reference board's
+// 148 MHz flash clock. Once the board is proven stable, CLKDIV=3 can be tested.
+#define PICOFACE_QMI_M0_TIMING_OC 0x60007304u
 
-// 480 MHz target: CLKDIV=4, RXDELAY=3 -> 120 MHz flash, within spec. Used by
-// PicoFaceRD, whose engine needs the higher core clock; the other five run at
-// 444 MHz and use the OC value above. Same single-source-of-truth rule: boot
-// (pico_hw.cpp) and the post-flash-write restore in veeprom.cpp must agree.
+// 480 MHz target used by PicoFaceRD: CLKDIV=4, RXDELAY=3 -> 120 MHz flash.
 #define PICOFACE_QMI_M0_TIMING_RD 0x60007304u
-
-// Which of the two target values an instrument uses is a software decision in
-// its instrument.cmake, not a hardware difference - the board is identical for
-// every instrument.
 
 #endif // __PROJECT_CONFIG_H__
